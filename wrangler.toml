@@ -5,5 +5,5 @@ pages_build_output_dir = "dist"
 [[d1_databases]]
 binding = "DB"
 database_name = "cet4-vocab-checkin"
-database_id = "replace-with-cloudflare-d1-database-id"
+database_id = "b3825775-ca0b-4351-a9a2-3999166abeba"
 preview_database_id = "cet4-vocab-checkin"
