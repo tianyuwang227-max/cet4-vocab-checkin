@@ -1,0 +1,9 @@
+name = "cet4-vocab-checkin"
+compatibility_date = "2026-05-05"
+pages_build_output_dir = "dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "cet4-vocab-checkin"
+database_id = "replace-with-cloudflare-d1-database-id"
+preview_database_id = "cet4-vocab-checkin"

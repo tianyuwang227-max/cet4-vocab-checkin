@@ -1,0 +1,29 @@
+{
+  "name": "cet4-vocab-checkin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "pages:dev": "wrangler pages dev dist --d1 DB=cet4-vocab-checkin --compatibility-date=2026-05-05 --port 8790",
+    "db:migrate:local": "wrangler d1 migrations apply cet4-vocab-checkin --local",
+    "db:migrate:remote": "wrangler d1 migrations apply cet4-vocab-checkin --remote"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "framer-motion": "latest",
+    "lucide-react": "latest",
+    "vite": "latest",
+    "wrangler": "latest",
+    "typescript": "latest",
+    "react": "latest",
+    "react-dom": "latest"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest"
+  }
+}
