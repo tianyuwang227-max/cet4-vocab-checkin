@@ -24,8 +24,8 @@ type AppState = {
   modes: Record<string, string>;
 };
 
-type View = "home" | "import" | "groups" | "learn" | "review" | "checkins";
-type PracticeKind = "today" | "makeup" | "review" | "wrong";
+type View = "home" | "words" | "import" | "groups" | "learn" | "review" | "checkins";
+type PracticeKind = "today" | "makeup" | "review" | "date_review" | "wrong";
 
 const modes = [
   { id: "listen_spell", label: "听音拼写", icon: Headphones },
@@ -56,12 +56,12 @@ function App() {
 
   const currentUser = state?.users.find((user) => user.id === userId);
 
-  async function start(kind: PracticeKind, groupId?: number, mode = selectedMode) {
+  async function start(kind: PracticeKind, groupId?: number, mode = selectedMode, reviewDate?: string) {
     setBusy(true);
     try {
       const data = await api<{ session: Session; words: Word[] }>("/api/sessions/start", {
         method: "POST",
-        body: { userId, mode, kind, groupId, date: today },
+        body: { userId, mode, kind, groupId, date: today, reviewDate },
       });
       setPractice({ ...data, index: 0, answer: "" });
       setView("learn");
@@ -118,6 +118,7 @@ function App() {
         </div>
         <nav>
           <button className={view === "home" ? "active" : ""} onClick={() => setView("home")}><ClipboardList />今日</button>
+          <button className={view === "words" ? "active" : ""} onClick={() => setView("words")}><Headphones />单词</button>
           <button className={view === "import" ? "active" : ""} onClick={() => setView("import")}><Upload />录入</button>
           <button className={view === "groups" ? "active" : ""} onClick={() => setView("groups")}><BookOpen />词组</button>
           <button className={view === "review" ? "active" : ""} onClick={() => setView("review")}><RotateCcw />复习</button>
@@ -151,6 +152,7 @@ function App() {
             ) : (
               <>
                 {view === "home" && state && <Home state={state} selectedMode={selectedMode} setSelectedMode={setSelectedMode} start={start} busy={busy} />}
+                {view === "words" && state && <WordBrowser state={state} />}
                 {view === "import" && <ImportWords onImported={() => load().catch(console.error)} />}
                 {view === "groups" && state && <Groups groups={state.groups} />}
                 {view === "review" && state && <Review state={state} selectedMode={selectedMode} setSelectedMode={setSelectedMode} start={start} />}
@@ -303,14 +305,84 @@ function Groups({ groups }: { groups: Group[] }) {
   );
 }
 
-function Review({ state, selectedMode, setSelectedMode, start }: { state: AppState; selectedMode: string; setSelectedMode: (mode: string) => void; start: (kind: PracticeKind, groupId?: number, mode?: string) => void }) {
+function WordBrowser({ state }: { state: AppState }) {
+  const [source, setSource] = React.useState<"today" | "group" | "date">("today");
+  const [groupId, setGroupId] = React.useState(String(state.todayGroup?.id || state.groups[0]?.id || ""));
+  const [wordDate, setWordDate] = React.useState(today);
+  const [data, setData] = React.useState<{ group: Group | null; words: Word[] } | null>(null);
+
+  const requestUrl = React.useMemo(() => {
+    if (source === "date") return `/api/words?date=${wordDate}`;
+    if (source === "group") return `/api/words?groupId=${groupId}`;
+    return state.todayGroup ? `/api/words?groupId=${state.todayGroup.id}` : "";
+  }, [groupId, source, state.todayGroup, wordDate]);
+
+  React.useEffect(() => {
+    if (!requestUrl) {
+      setData({ group: null, words: [] });
+      return;
+    }
+    api<{ group: Group | null; words: Word[] }>(requestUrl).then(setData).catch(console.error);
+  }, [requestUrl]);
+
+  return (
+    <div className="stack">
+      <Panel title="查看要背的单词">
+        <div className="controls">
+          <button className={source === "today" ? "pill active" : "pill"} onClick={() => setSource("today")}>今日</button>
+          <button className={source === "group" ? "pill active" : "pill"} onClick={() => setSource("group")}>按组</button>
+          <button className={source === "date" ? "pill active" : "pill"} onClick={() => setSource("date")}>按日期</button>
+          {source === "group" && (
+            <select value={groupId} onChange={(event) => setGroupId(event.target.value)}>
+              {state.groups.map((group) => <option key={group.id} value={group.id}>{group.title} · {group.word_count}/30</option>)}
+            </select>
+          )}
+          {source === "date" && <input type="date" value={wordDate} onChange={(event) => setWordDate(event.target.value)} />}
+        </div>
+        <p className="notice">{data?.group ? `${data.group.title} · ${data.words.length} 个单词` : "这个范围还没有单词"}</p>
+      </Panel>
+      <WordList words={data?.words || []} />
+    </div>
+  );
+}
+
+function WordList({ words }: { words: Word[] }) {
+  if (words.length === 0) return <Panel title="单词列表"><Empty text="暂无单词" /></Panel>;
+  return (
+    <section className="word-list">
+      {words.map((word) => (
+        <motion.article className="word-card" key={word.id} whileHover={{ y: -2 }}>
+          <button className="icon-button" onClick={() => speak(word.word)} aria-label={`播放 ${word.word}`}>
+            <Headphones />
+          </button>
+          <div>
+            <strong>{word.word}</strong>
+            <span>{word.meaning}</span>
+          </div>
+          <em>#{word.position}</em>
+        </motion.article>
+      ))}
+    </section>
+  );
+}
+
+function Review({ state, selectedMode, setSelectedMode, start }: { state: AppState; selectedMode: string; setSelectedMode: (mode: string) => void; start: (kind: PracticeKind, groupId?: number, mode?: string, reviewDate?: string) => void }) {
+  const [reviewDate, setReviewDate] = React.useState(today);
+
   return (
     <div className="stack">
       <ModePicker value={selectedMode} onChange={setSelectedMode} />
-      <div className="grid two">
+      <div className="grid three">
         <Panel title="今日复习">
           <p className="muted">昨日词、最近错词和高频错词去重后最多 30 个。</p>
           <button className="primary" disabled={state.reviewCount === 0} onClick={() => start("review")}>复习 {state.reviewCount} 个</button>
+        </Panel>
+        <Panel title="按日期复习">
+          <p className="muted">选择某一天，复习那天对应的新词组。</p>
+          <div className="date-action">
+            <input type="date" value={reviewDate} onChange={(event) => setReviewDate(event.target.value)} />
+            <button className="primary" onClick={() => start("date_review", undefined, selectedMode, reviewDate)}>开始</button>
+          </div>
         </Panel>
         <Panel title="错词听写">
           <p className="muted">按错误次数从高到低排序。</p>
@@ -355,7 +427,7 @@ function Empty({ text }: { text: string }) {
 }
 
 function viewTitle(view: View) {
-  return ({ home: "今日任务", import: "单词录入", groups: "单词组", learn: "学习", review: "复习", checkins: "打卡记录" })[view];
+  return ({ home: "今日任务", words: "单词查看", import: "单词录入", groups: "单词组", learn: "学习", review: "复习", checkins: "打卡记录" })[view];
 }
 
 function modeLabel(mode: string) {

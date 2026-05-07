@@ -37,6 +37,10 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
       return json(await getGroups(env.DB));
     }
 
+    if (request.method === "GET" && path === "words") {
+      return json(await getWords(env.DB, url));
+    }
+
     if (request.method === "POST" && path === "words/import") {
       return json(await importWords(env.DB, await request.json()));
     }
@@ -132,6 +136,16 @@ async function getGroups(db: D1Database) {
   return groups.results;
 }
 
+async function getWords(db: D1Database, url: URL) {
+  const groupId = Number(url.searchParams.get("groupId") || "");
+  const date = url.searchParams.get("date");
+  const group = groupId ? await getGroupById(db, groupId) : date ? await getGroupForDate(db, date) : null;
+  if (!group) return { group: null, words: [] };
+
+  const rows = await db.prepare("SELECT * FROM words WHERE group_id = ? ORDER BY position").bind(group.id).all<Word>();
+  return { group, words: rows.results };
+}
+
 async function importWords(db: D1Database, body: unknown) {
   const text = readString(body, "text");
   const parsed = text
@@ -190,14 +204,43 @@ async function createGroup(db: D1Database, groupNumber: number) {
   return group;
 }
 
+async function getGroupById(db: D1Database, groupId: number) {
+  return db
+    .prepare(
+      `SELECT g.id, g.group_number, g.title, COUNT(w.id) AS word_count
+       FROM word_groups g
+       LEFT JOIN words w ON w.group_id = g.id
+       WHERE g.id = ?
+       GROUP BY g.id`
+    )
+    .bind(groupId)
+    .first<{ id: number; group_number: number; title: string; word_count: number }>();
+}
+
+async function getGroupForDate(db: D1Database, date: string) {
+  const firstGroup = await db.prepare("SELECT MIN(date(created_at)) as start_date FROM word_groups").first<{ start_date: string | null }>();
+  const groupNumber = firstGroup?.start_date ? daysBetween(firstGroup.start_date, date) + 1 : 1;
+  return db
+    .prepare(
+      `SELECT g.id, g.group_number, g.title, COUNT(w.id) AS word_count
+       FROM word_groups g
+       LEFT JOIN words w ON w.group_id = g.id
+       WHERE g.group_number = ?
+       GROUP BY g.id`
+    )
+    .bind(groupNumber)
+    .first<{ id: number; group_number: number; title: string; word_count: number }>();
+}
+
 async function startSession(db: D1Database, body: unknown) {
   const userId = readString(body, "userId");
   const mode = readString(body, "mode");
   const kind = readString(body, "kind");
   const date = readOptionalString(body, "date") || new Date().toISOString().slice(0, 10);
+  const reviewDate = readOptionalString(body, "reviewDate");
   const groupId = readOptionalNumber(body, "groupId");
 
-  const words = await resolveWords(db, userId, kind, date, groupId, mode);
+  const words = await resolveWords(db, userId, kind, date, groupId, mode, reviewDate);
   if (words.length === 0) throw new Error("没有可学习的单词");
 
   const sessionId = crypto.randomUUID();
@@ -265,7 +308,7 @@ async function finishSession(db: D1Database, body: unknown) {
     const wrongReviewDone = Number(session.wrong_count) === 0 ? 1 : 0;
     await upsertCheckin(db, userId, date, { study_done: 1, wrong_review_done: wrongReviewDone });
   }
-  if (session.kind === "review") {
+  if (session.kind === "review" || session.kind === "date_review") {
     await upsertCheckin(db, userId, date, { review_done: 1 });
   }
   if (session.kind === "wrong") {
@@ -306,15 +349,23 @@ async function getSession(db: D1Database, sessionId: string) {
   return db.prepare("SELECT * FROM study_sessions WHERE id = ?").bind(sessionId).first();
 }
 
-async function resolveWords(db: D1Database, userId: string, kind: string, date: string, groupId?: number, mode?: string) {
+async function resolveWords(db: D1Database, userId: string, kind: string, date: string, groupId?: number, mode?: string, reviewDate?: string) {
   if (kind === "today" || kind === "makeup") {
     if (!groupId) throw new Error("缺少单词组");
     const rows = await db.prepare("SELECT * FROM words WHERE group_id = ? ORDER BY position").bind(groupId).all<Word>();
     return mode === "random_spell" ? shuffle(rows.results) : rows.results;
   }
   if (kind === "review") return getReviewWords(db, userId, date, 30);
+  if (kind === "date_review") return getDateReviewWords(db, reviewDate || date, mode);
   if (kind === "wrong") return getWrongWords(db, userId, 30);
   throw new Error("未知学习类型");
+}
+
+async function getDateReviewWords(db: D1Database, date: string, mode?: string) {
+  const group = await getGroupForDate(db, date);
+  if (!group) return [];
+  const rows = await db.prepare("SELECT * FROM words WHERE group_id = ? ORDER BY position").bind(group.id).all<Word>();
+  return mode === "random_spell" ? shuffle(rows.results) : rows.results;
 }
 
 async function getReviewWords(db: D1Database, userId: string, date: string, limit: number) {
