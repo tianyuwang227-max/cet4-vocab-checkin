@@ -186,6 +186,54 @@ h3 {
   border-radius: 8px;
 }
 
+.goal-card {
+  min-height: 128px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 24px;
+  color: #17211a;
+  background: #ffffff;
+  border: 1px solid #dfe8d6;
+  border-left: 6px solid #e7ff72;
+  border-radius: 8px;
+}
+
+.goal-card h2 {
+  margin-top: 8px;
+  font-size: 1.45rem;
+}
+
+.goal-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.goal-input {
+  width: min(560px, 100%);
+  min-height: 48px;
+  margin-top: 8px;
+  padding: 0 12px;
+  color: #17211a;
+  background: #f8faf4;
+  border: 1px solid #d9e0d2;
+  border-radius: 8px;
+  outline: none;
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.ghost-light {
+  min-height: 42px;
+  padding: 0 14px;
+  color: #17211a;
+  background: #edf5e5;
+  border-radius: 8px;
+  font-weight: 800;
+}
+
 .task-band p {
   margin-top: 10px;
   color: #d3ddcf;
@@ -605,8 +653,15 @@ input[type="date"] {
   }
 
   .task-band,
+  .goal-card,
   .topbar {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .goal-actions,
+  .goal-actions .primary,
+  .goal-actions .ghost-light {
+    width: 100%;
   }
 }

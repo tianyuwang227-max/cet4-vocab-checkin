@@ -7,6 +7,7 @@ import "./styles.css";
 type User = { id: string; name: string };
 type Group = { id: number; group_number: number; title: string; word_count: number };
 type Checkin = { study_done: number; review_done: number; wrong_review_done: number; completed_at: string | null };
+type DailyGoal = { date: string; goal_text: string; updated_at: string | null };
 type Word = { id: number; word: string; meaning: string; group_id: number; position: number; wrong_count?: number; options?: string[] };
 type Session = { id: string; mode: string; kind: string; current_index: number; total: number; correct_count: number; wrong_count: number; status: string };
 type AppState = {
@@ -21,6 +22,7 @@ type AppState = {
   makeupGroups: Group[];
   wrongWords: Word[];
   reviewCount: number;
+  dailyGoal: DailyGoal;
   modes: Record<string, string>;
 };
 
@@ -151,7 +153,7 @@ function App() {
               />
             ) : (
               <>
-                {view === "home" && state && <Home state={state} selectedMode={selectedMode} setSelectedMode={setSelectedMode} start={start} busy={busy} />}
+                {view === "home" && state && <Home state={state} selectedMode={selectedMode} setSelectedMode={setSelectedMode} start={start} busy={busy} onGoalSaved={() => load().catch(console.error)} />}
                 {view === "words" && state && <WordBrowser state={state} />}
                 {view === "import" && <ImportWords onImported={() => load().catch(console.error)} />}
                 {view === "groups" && state && <Groups groups={state.groups} />}
@@ -166,9 +168,10 @@ function App() {
   );
 }
 
-function Home({ state, selectedMode, setSelectedMode, start, busy }: { state: AppState; selectedMode: string; setSelectedMode: (mode: string) => void; start: (kind: PracticeKind, groupId?: number, mode?: string) => void; busy: boolean }) {
+function Home({ state, selectedMode, setSelectedMode, start, busy, onGoalSaved }: { state: AppState; selectedMode: string; setSelectedMode: (mode: string) => void; start: (kind: PracticeKind, groupId?: number, mode?: string) => void; busy: boolean; onGoalSaved: () => void }) {
   return (
     <div className="stack">
+      <DailyGoalCard goal={state.dailyGoal} onSaved={onGoalSaved} />
       <section className="task-band">
         <div>
           <span className="eyebrow">今日新词</span>
@@ -193,6 +196,52 @@ function Home({ state, selectedMode, setSelectedMode, start, busy }: { state: Ap
         </Panel>
       </div>
     </div>
+  );
+}
+
+function DailyGoalCard({ goal, onSaved }: { goal: DailyGoal; onSaved: () => void }) {
+  const [editing, setEditing] = React.useState(false);
+  const [text, setText] = React.useState(goal.goal_text);
+  const [saving, setSaving] = React.useState(false);
+
+  React.useEffect(() => {
+    setText(goal.goal_text);
+  }, [goal.goal_text]);
+
+  async function save() {
+    const nextText = text.trim();
+    if (!nextText) return;
+    setSaving(true);
+    try {
+      await api<{ dailyGoal: DailyGoal }>("/api/goal", { method: "POST", body: { date: goal.date, goalText: nextText } });
+      setEditing(false);
+      onSaved();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="goal-card">
+      <div>
+        <span className="eyebrow">两人共同目标</span>
+        {editing ? (
+          <input className="goal-input" value={text} maxLength={120} onChange={(event) => setText(event.target.value)} onKeyDown={(event) => event.key === "Enter" && save()} autoFocus />
+        ) : (
+          <h2>{goal.goal_text}</h2>
+        )}
+      </div>
+      <div className="goal-actions">
+        {editing ? (
+          <>
+            <button className="ghost-light" onClick={() => { setText(goal.goal_text); setEditing(false); }}>取消</button>
+            <button className="primary" disabled={saving || !text.trim()} onClick={save}>保存</button>
+          </>
+        ) : (
+          <button className="ghost-light" onClick={() => setEditing(true)}>更改</button>
+        )}
+      </div>
+    </section>
   );
 }
 

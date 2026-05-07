@@ -45,6 +45,10 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
       return json(await importWords(env.DB, await request.json()));
     }
 
+    if (request.method === "POST" && path === "goal") {
+      return json(await updateDailyGoal(env.DB, await request.json()));
+    }
+
     if (request.method === "POST" && path === "sessions/start") {
       return json(await startSession(env.DB, await request.json()));
     }
@@ -106,6 +110,7 @@ async function getAppState(db: D1Database, url: URL) {
   const makeupGroups = groups.filter((group) => group.group_number < todayGroupNumber && !completedGroupIds.has(group.id));
   const wrongWords = await getWrongWords(db, userId, 10);
   const reviewWords = await getReviewWords(db, userId, date, 30);
+  const dailyGoal = await getDailyGoal(db, date);
 
   return {
     users: users.results,
@@ -119,6 +124,7 @@ async function getAppState(db: D1Database, url: URL) {
     makeupGroups,
     wrongWords,
     reviewCount: reviewWords.length,
+    dailyGoal,
     modes: modeNames,
   };
 }
@@ -192,6 +198,25 @@ async function importWords(db: D1Database, body: unknown) {
   }
 
   return { insertedCount: inserted.length, skipped, inserted, groups: await getGroups(db) };
+}
+
+async function getDailyGoal(db: D1Database, date: string) {
+  const row = await db.prepare("SELECT date, goal_text, updated_at FROM daily_goals WHERE date = ?").bind(date).first<{ date: string; goal_text: string; updated_at: string }>();
+  return row || { date, goal_text: "完成今日新词、今日复习和错词重学", updated_at: null };
+}
+
+async function updateDailyGoal(db: D1Database, body: unknown) {
+  const date = readString(body, "date");
+  const goalText = readString(body, "goalText").trim().slice(0, 120);
+  await db
+    .prepare(
+      `INSERT INTO daily_goals (date, goal_text, updated_at)
+       VALUES (?, ?, CURRENT_TIMESTAMP)
+       ON CONFLICT(date) DO UPDATE SET goal_text = excluded.goal_text, updated_at = CURRENT_TIMESTAMP`
+    )
+    .bind(date, goalText)
+    .run();
+  return { dailyGoal: await getDailyGoal(db, date) };
 }
 
 async function createGroup(db: D1Database, groupNumber: number) {

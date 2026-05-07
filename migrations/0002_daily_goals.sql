@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS daily_goals (
+  date TEXT PRIMARY KEY,
+  goal_text TEXT NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
