@@ -454,6 +454,19 @@ input[type="date"] {
   font-weight: 800;
 }
 
+.app-message {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+  padding: 0 14px;
+  color: #8f2f22;
+  background: #ffe5df;
+  border-radius: 8px;
+  font-weight: 800;
+}
+
 .practice {
   max-width: 820px;
   margin: 0 auto;

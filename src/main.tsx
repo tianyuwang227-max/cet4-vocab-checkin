@@ -45,6 +45,7 @@ function App() {
   const [practice, setPractice] = React.useState<{ session: Session; words: Word[]; index: number; answer: string; last?: { ok: boolean; correctWord: string } } | null>(null);
   const [selectedMode, setSelectedMode] = React.useState("listen_spell");
   const [busy, setBusy] = React.useState(false);
+  const [message, setMessage] = React.useState("");
 
   const load = React.useCallback(async (nextUser = userId) => {
     const data = await api<AppState>(`/api/app?userId=${nextUser}&date=${today}`);
@@ -60,6 +61,7 @@ function App() {
 
   async function start(kind: PracticeKind, groupId?: number, mode = selectedMode, reviewDate?: string) {
     setBusy(true);
+    setMessage("");
     try {
       const data = await api<{ session: Session; words: Word[] }>("/api/sessions/start", {
         method: "POST",
@@ -68,6 +70,8 @@ function App() {
       setPractice({ ...data, index: 0, answer: "" });
       setView("learn");
       speakIfNeeded(data.words[0], mode);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "操作失败");
     } finally {
       setBusy(false);
     }
@@ -136,6 +140,7 @@ function App() {
           </div>
           <CheckinStrip checkin={state?.checkin} />
         </header>
+        {message && <div className="app-message"><X /><span>{message}</span></div>}
 
         <AnimatePresence mode="wait">
           <motion.section key={practice ? "practice" : view} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.18 }}>
@@ -169,6 +174,8 @@ function App() {
 }
 
 function Home({ state, selectedMode, setSelectedMode, start, busy, onGoalSaved }: { state: AppState; selectedMode: string; setSelectedMode: (mode: string) => void; start: (kind: PracticeKind, groupId?: number, mode?: string) => void; busy: boolean; onGoalSaved: () => void }) {
+  const canStartToday = Boolean(state.todayGroup && state.todayGroup.word_count > 0);
+
   return (
     <div className="stack">
       <DailyGoalCard goal={state.dailyGoal} onSaved={onGoalSaved} />
@@ -176,9 +183,9 @@ function Home({ state, selectedMode, setSelectedMode, start, busy, onGoalSaved }
         <div>
           <span className="eyebrow">今日新词</span>
           <h2>{state.todayGroup ? `${state.todayGroup.title} · ${state.todayGroup.word_count}/30` : "还没有单词组"}</h2>
-          <p>两个人每天学习同一组词，答题、错词和打卡分别记录。</p>
+          <p>{canStartToday ? "两个人每天学习同一组词，答题、错词和打卡分别记录。" : "今天对应的单词组还没有可学习单词，可以先录入新词或做补学/复习。"}</p>
         </div>
-        <button className="primary" disabled={!state.todayGroup || busy} onClick={() => state.todayGroup && start("today", state.todayGroup.id)}>
+        <button className="primary" disabled={!canStartToday || busy} onClick={() => state.todayGroup && start("today", state.todayGroup.id)}>
           <Play />开始
         </button>
       </section>

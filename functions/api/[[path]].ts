@@ -171,10 +171,10 @@ async function importWords(db: D1Database, body: unknown) {
 
   const inserted: Word[] = [];
   const skipped: string[] = [];
-  let meta = await db.prepare("SELECT MAX(group_number) AS group_number FROM word_groups").first<{ group_number: number | null }>();
+  const meta = await db.prepare("SELECT MAX(group_number) AS group_number FROM word_groups").first<{ group_number: number | null }>();
   let nextGroupNumber = (meta?.group_number || 0) + 1;
-  let currentGroup = await createGroup(db, nextGroupNumber);
-  let position = 1;
+  let currentGroup: { id: number; group_number: number; title: string } | null = null;
+  let position = 31;
 
   for (const item of parsed) {
     const existing = await db.prepare("SELECT id FROM words WHERE word = ? COLLATE NOCASE").bind(item.word).first();
@@ -183,9 +183,10 @@ async function importWords(db: D1Database, body: unknown) {
       continue;
     }
 
-    if (position > 30) {
+    if (!currentGroup || position > 30) {
+      const group = await createGroup(db, nextGroupNumber);
+      currentGroup = group;
       nextGroupNumber += 1;
-      currentGroup = await createGroup(db, nextGroupNumber);
       position = 1;
     }
 
