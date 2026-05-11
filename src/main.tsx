@@ -1,7 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { AnimatePresence, motion } from "framer-motion";
-import { BookOpen, CalendarCheck, Check, ClipboardList, Headphones, ListChecks, Play, RotateCcw, Upload, X } from "lucide-react";
+import { BookOpen, CalendarCheck, Check, ClipboardList, Headphones, ListChecks, Play, RotateCcw, Trash2, Upload, X } from "lucide-react";
 import "./styles.css";
 
 type User = { id: string; name: string };
@@ -161,7 +161,7 @@ function App() {
                 {view === "home" && state && <Home state={state} selectedMode={selectedMode} setSelectedMode={setSelectedMode} start={start} busy={busy} onGoalSaved={() => load().catch(console.error)} />}
                 {view === "words" && state && <WordBrowser state={state} />}
                 {view === "import" && <ImportWords onImported={() => load().catch(console.error)} />}
-                {view === "groups" && state && <Groups groups={state.groups} />}
+                {view === "groups" && state && <Groups groups={state.groups} onChanged={() => load().catch(console.error)} />}
                 {view === "review" && state && <Review state={state} selectedMode={selectedMode} setSelectedMode={setSelectedMode} start={start} />}
                 {view === "checkins" && <Checkins checkin={state?.checkin} userName={currentUser?.name || ""} />}
               </>
@@ -348,16 +348,82 @@ function ImportWords({ onImported }: { onImported: () => void }) {
   );
 }
 
-function Groups({ groups }: { groups: Group[] }) {
+function Groups({ groups, onChanged }: { groups: Group[]; onChanged: () => void }) {
+  const [selectedGroupId, setSelectedGroupId] = React.useState(groups[0]?.id ? String(groups[0].id) : "");
+  const [data, setData] = React.useState<{ group: Group | null; words: Word[] } | null>(null);
+  const [notice, setNotice] = React.useState("");
+
+  React.useEffect(() => {
+    if (!selectedGroupId && groups[0]?.id) setSelectedGroupId(String(groups[0].id));
+  }, [groups, selectedGroupId]);
+
+  const loadWords = React.useCallback(async () => {
+    if (!selectedGroupId) {
+      setData({ group: null, words: [] });
+      return;
+    }
+    const next = await api<{ group: Group | null; words: Word[] }>(`/api/words?groupId=${selectedGroupId}`);
+    setData(next);
+  }, [selectedGroupId]);
+
+  React.useEffect(() => {
+    loadWords().catch(console.error);
+  }, [loadWords]);
+
+  async function deleteSelectedGroup() {
+    if (!data?.group) return;
+    const confirmed = window.confirm(`确定删除${data.group.title}和里面的 ${data.words.length} 个单词吗？相关学习记录和错词记录也会清理。`);
+    if (!confirmed) return;
+    await api("/api/groups/delete", { method: "POST", body: { groupId: data.group.id } });
+    setNotice(`已删除${data.group.title}`);
+    const remaining = groups.filter((group) => group.id !== data.group?.id);
+    setSelectedGroupId(remaining[0]?.id ? String(remaining[0].id) : "");
+    setData({ group: null, words: [] });
+    onChanged();
+  }
+
+  async function deleteWord(word: Word) {
+    const confirmed = window.confirm(`确定删除单词 ${word.word} 吗？相关学习记录和错词记录也会清理。`);
+    if (!confirmed) return;
+    const result = await api<{ deletedGroup: boolean }>("/api/words/delete", { method: "POST", body: { wordId: word.id } });
+    setNotice(result.deletedGroup ? "最后一个单词已删除，空单词组也已删除" : `已删除 ${word.word}`);
+    if (result.deletedGroup) {
+      const remaining = groups.filter((group) => group.id !== word.group_id);
+      setSelectedGroupId(remaining[0]?.id ? String(remaining[0].id) : "");
+      setData({ group: null, words: [] });
+    } else {
+      await loadWords();
+    }
+    onChanged();
+  }
+
   return (
-    <Panel title="单词组">
-      {groups.length === 0 ? <Empty text="还没有录入单词" /> : groups.map((group) => (
-        <div className="group-row" key={group.id}>
-          <strong>{group.title}</strong>
-          <span>{group.word_count}/30</span>
-        </div>
-      ))}
-    </Panel>
+    <div className="grid two">
+      <Panel title="单词组管理">
+        {groups.length === 0 ? (
+          <Empty text="还没有录入单词" />
+        ) : (
+          <div className="group-management">
+            <select value={selectedGroupId} onChange={(event) => setSelectedGroupId(event.target.value)}>
+              {groups.map((group) => <option key={group.id} value={group.id}>{group.title} · {group.word_count}/30</option>)}
+            </select>
+            <button className="danger" disabled={!data?.group} onClick={deleteSelectedGroup}><Trash2 />删除整组</button>
+          </div>
+        )}
+        {notice && <p className="notice">{notice}</p>}
+      </Panel>
+      <Panel title={data?.group ? `${data.group.title} 单词` : "组内单词"}>
+        {!data || data.words.length === 0 ? <Empty text="这个词组没有单词" /> : data.words.map((word) => (
+          <div className="managed-word-row" key={word.id}>
+            <div>
+              <strong>{word.word}</strong>
+              <span>{word.meaning}</span>
+            </div>
+            <button className="danger small" onClick={() => deleteWord(word)}><Trash2 />删除</button>
+          </div>
+        ))}
+      </Panel>
+    </div>
   );
 }
 

@@ -45,6 +45,14 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
       return json(await importWords(env.DB, await request.json()));
     }
 
+    if (request.method === "POST" && path === "words/delete") {
+      return json(await deleteWord(env.DB, await request.json()));
+    }
+
+    if (request.method === "POST" && path === "groups/delete") {
+      return json(await deleteGroup(env.DB, await request.json()));
+    }
+
     if (request.method === "POST" && path === "goal") {
       return json(await updateDailyGoal(env.DB, await request.json()));
     }
@@ -199,6 +207,50 @@ async function importWords(db: D1Database, body: unknown) {
   }
 
   return { insertedCount: inserted.length, skipped, inserted, groups: await getGroups(db) };
+}
+
+async function deleteWord(db: D1Database, body: unknown) {
+  const wordId = readNumber(body, "wordId");
+  const word = await db.prepare("SELECT id, group_id FROM words WHERE id = ?").bind(wordId).first<{ id: number; group_id: number }>();
+  if (!word) throw new Error("单词不存在");
+
+  await db.prepare("DELETE FROM study_answers WHERE word_id = ?").bind(wordId).run();
+  await db.prepare("DELETE FROM wrong_words WHERE word_id = ?").bind(wordId).run();
+  await db.prepare("DELETE FROM words WHERE id = ?").bind(wordId).run();
+  await reindexGroupWords(db, word.group_id);
+
+  const count = await db.prepare("SELECT COUNT(*) AS count FROM words WHERE group_id = ?").bind(word.group_id).first<{ count: number }>();
+  let deletedGroup = false;
+  if (!count || count.count === 0) {
+    await db.prepare("DELETE FROM study_sessions WHERE group_id = ?").bind(word.group_id).run();
+    await db.prepare("DELETE FROM word_groups WHERE id = ?").bind(word.group_id).run();
+    deletedGroup = true;
+  }
+
+  return { ok: true, deletedGroup, groups: await getGroups(db) };
+}
+
+async function deleteGroup(db: D1Database, body: unknown) {
+  const groupId = readNumber(body, "groupId");
+  const group = await getGroupById(db, groupId);
+  if (!group) throw new Error("单词组不存在");
+
+  await db.prepare("DELETE FROM study_answers WHERE word_id IN (SELECT id FROM words WHERE group_id = ?)").bind(groupId).run();
+  await db.prepare("DELETE FROM wrong_words WHERE word_id IN (SELECT id FROM words WHERE group_id = ?)").bind(groupId).run();
+  await db.prepare("DELETE FROM study_sessions WHERE group_id = ?").bind(groupId).run();
+  await db.prepare("DELETE FROM words WHERE group_id = ?").bind(groupId).run();
+  await db.prepare("DELETE FROM word_groups WHERE id = ?").bind(groupId).run();
+
+  return { ok: true, groups: await getGroups(db) };
+}
+
+async function reindexGroupWords(db: D1Database, groupId: number) {
+  const rows = await db.prepare("SELECT id FROM words WHERE group_id = ? ORDER BY position, id").bind(groupId).all<{ id: number }>();
+  let position = 1;
+  for (const row of rows.results) {
+    await db.prepare("UPDATE words SET position = ? WHERE id = ?").bind(position, row.id).run();
+    position += 1;
+  }
 }
 
 async function getDailyGoal(db: D1Database, date: string) {

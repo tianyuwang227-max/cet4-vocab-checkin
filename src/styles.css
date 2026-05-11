@@ -322,6 +322,54 @@ h3 {
   color: #17211a;
 }
 
+.group-management {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.danger {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 14px;
+  color: #8f2f22;
+  background: #ffe5df;
+  border-radius: 8px;
+  font-weight: 800;
+}
+
+.danger.small {
+  min-height: 36px;
+  padding: 0 10px;
+}
+
+.managed-word-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid #edf0e9;
+}
+
+.managed-word-row:first-of-type {
+  border-top: 0;
+}
+
+.managed-word-row strong,
+.managed-word-row span {
+  display: block;
+}
+
+.managed-word-row span {
+  margin-top: 4px;
+  color: #70806f;
+}
+
 .word-row em {
   color: #ad3f2e;
   font-style: normal;
@@ -672,9 +720,15 @@ input[type="date"] {
     flex-direction: column;
   }
 
+  .group-management,
+  .managed-word-row {
+    grid-template-columns: 1fr;
+  }
+
   .goal-actions,
   .goal-actions .primary,
-  .goal-actions .ghost-light {
+  .goal-actions .ghost-light,
+  .danger {
     width: 100%;
   }
 }
