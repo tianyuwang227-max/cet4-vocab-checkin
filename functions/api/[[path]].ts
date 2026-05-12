@@ -99,9 +99,8 @@ async function getAppState(db: D1Database, url: URL) {
   const date = localDate(url);
   const users = await db.prepare("SELECT id, name FROM users ORDER BY id DESC").all();
   const groups = await getGroups(db);
-  const firstGroup = await db.prepare("SELECT MIN(date(created_at)) as start_date FROM word_groups").first<{ start_date: string | null }>();
-  const todayGroupNumber = firstGroup?.start_date ? daysBetween(firstGroup.start_date, date) + 1 : 1;
-  const todayGroup = groups.find((group) => group.group_number === todayGroupNumber) || null;
+  const todayGroupNumber = await getScheduledGroupNumber(db, date);
+  const todayGroup = getScheduledGroup(groups, todayGroupNumber);
   const checkin = await db
     .prepare("SELECT * FROM checkins WHERE user_id = ? AND date = ?")
     .bind(userId, date)
@@ -115,7 +114,7 @@ async function getAppState(db: D1Database, url: URL) {
     .bind(userId)
     .all<{ group_id: number }>();
   const completedGroupIds = new Set(completedGroups.results.map((row) => row.group_id));
-  const makeupGroups = groups.filter((group) => group.group_number < todayGroupNumber && !completedGroupIds.has(group.id));
+  const makeupGroups = groups.filter((group) => group.id !== todayGroup?.id && group.group_number < (todayGroup?.group_number || todayGroupNumber) && !completedGroupIds.has(group.id));
   const wrongWords = await getWrongWords(db, userId, 10);
   const reviewWords = await getReviewWords(db, userId, date, 30);
   const dailyGoal = await getDailyGoal(db, date);
@@ -150,6 +149,16 @@ async function getGroups(db: D1Database) {
   return groups.results;
 }
 
+function getScheduledGroup<T extends { group_number: number }>(groups: T[], groupNumber: number) {
+  if (groups.length === 0) return null;
+  return groups.find((group) => group.group_number === groupNumber) || groups[groups.length - 1];
+}
+
+async function getScheduledGroupNumber(db: D1Database, date: string) {
+  const firstGroup = await db.prepare("SELECT MIN(date(created_at)) as start_date FROM word_groups").first<{ start_date: string | null }>();
+  return firstGroup?.start_date ? daysBetween(firstGroup.start_date, date) + 1 : 1;
+}
+
 async function getWords(db: D1Database, url: URL) {
   const groupId = Number(url.searchParams.get("groupId") || "");
   const date = url.searchParams.get("date");
@@ -166,11 +175,7 @@ async function importWords(db: D1Database, body: unknown) {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean)
-    .map((line) => {
-      const match = line.match(/^([A-Za-z][A-Za-z'’-]*)\s+(.+)$/);
-      if (!match) return null;
-      return { word: match[1].toLowerCase(), meaning: match[2].trim() };
-    })
+    .map(parseWordLine)
     .filter((item): item is { word: string; meaning: string } => Boolean(item));
 
   if (parsed.length === 0) {
@@ -181,8 +186,8 @@ async function importWords(db: D1Database, body: unknown) {
   const skipped: string[] = [];
   const meta = await db.prepare("SELECT MAX(group_number) AS group_number FROM word_groups").first<{ group_number: number | null }>();
   let nextGroupNumber = (meta?.group_number || 0) + 1;
-  let currentGroup: { id: number; group_number: number; title: string } | null = null;
-  let position = 31;
+  let currentGroup: { id: number; group_number: number; title: string; word_count: number } | null = await getFillableGroup(db);
+  let position = currentGroup ? currentGroup.word_count + 1 : 31;
 
   for (const item of parsed) {
     const existing = await db.prepare("SELECT id FROM words WHERE word = ? COLLATE NOCASE").bind(item.word).first();
@@ -192,21 +197,45 @@ async function importWords(db: D1Database, body: unknown) {
     }
 
     if (!currentGroup || position > 30) {
-      const group = await createGroup(db, nextGroupNumber);
-      currentGroup = group;
+      currentGroup = { ...(await createGroup(db, nextGroupNumber)), word_count: 0 };
       nextGroupNumber += 1;
       position = 1;
     }
 
+    const group = currentGroup;
     const result = await db
       .prepare("INSERT INTO words (word, meaning, group_id, position) VALUES (?, ?, ?, ?)")
-      .bind(item.word, item.meaning, currentGroup.id, position)
+      .bind(item.word, item.meaning, group.id, position)
       .run();
-    inserted.push({ id: Number(result.meta.last_row_id), word: item.word, meaning: item.meaning, group_id: currentGroup.id, position });
+    inserted.push({ id: Number(result.meta.last_row_id), word: item.word, meaning: item.meaning, group_id: group.id, position });
     position += 1;
   }
 
   return { insertedCount: inserted.length, skipped, inserted, groups: await getGroups(db) };
+}
+
+function parseWordLine(line: string) {
+  const normalized = line
+    .replace(/^\s*(?:[-*•]|\d+[.)、])\s*/, "")
+    .replace(/\s+[—–-]\s+/, " ")
+    .trim();
+  const match = normalized.match(/^([A-Za-z][A-Za-z'’-]*)\s+(.+)$/);
+  if (!match) return null;
+  return { word: match[1].toLowerCase(), meaning: match[2].trim() };
+}
+
+async function getFillableGroup(db: D1Database) {
+  return db
+    .prepare(
+      `SELECT g.id, g.group_number, g.title, COUNT(w.id) AS word_count
+       FROM word_groups g
+       LEFT JOIN words w ON w.group_id = g.id
+       GROUP BY g.id
+       HAVING word_count > 0 AND word_count < 30
+       ORDER BY g.group_number
+       LIMIT 1`
+    )
+    .first<{ id: number; group_number: number; title: string; word_count: number }>();
 }
 
 async function deleteWord(db: D1Database, body: unknown) {
@@ -296,17 +325,19 @@ async function getGroupById(db: D1Database, groupId: number) {
 }
 
 async function getGroupForDate(db: D1Database, date: string) {
-  const firstGroup = await db.prepare("SELECT MIN(date(created_at)) as start_date FROM word_groups").first<{ start_date: string | null }>();
-  const groupNumber = firstGroup?.start_date ? daysBetween(firstGroup.start_date, date) + 1 : 1;
+  const groupNumber = await getScheduledGroupNumber(db, date);
+  const groups = await getGroups(db);
+  const scheduledGroup = getScheduledGroup(groups, groupNumber);
+  if (!scheduledGroup) return null;
   return db
     .prepare(
       `SELECT g.id, g.group_number, g.title, COUNT(w.id) AS word_count
        FROM word_groups g
        LEFT JOIN words w ON w.group_id = g.id
-       WHERE g.group_number = ?
+       WHERE g.id = ?
        GROUP BY g.id`
     )
-    .bind(groupNumber)
+    .bind(scheduledGroup.id)
     .first<{ id: number; group_number: number; title: string; word_count: number }>();
 }
 
@@ -448,9 +479,8 @@ async function getDateReviewWords(db: D1Database, date: string, mode?: string) {
 
 async function getReviewWords(db: D1Database, userId: string, date: string, limit: number) {
   const groups = await getGroups(db);
-  const firstGroup = await db.prepare("SELECT MIN(date(created_at)) as start_date FROM word_groups").first<{ start_date: string | null }>();
-  const todayGroupNumber = firstGroup?.start_date ? daysBetween(firstGroup.start_date, date) + 1 : 1;
-  const yesterdayGroup = groups.find((group) => group.group_number === todayGroupNumber - 1);
+  const todayGroupNumber = await getScheduledGroupNumber(db, date);
+  const yesterdayGroup = getScheduledGroup(groups, todayGroupNumber - 1);
   const seen = new Set<number>();
   const words: Word[] = [];
 
