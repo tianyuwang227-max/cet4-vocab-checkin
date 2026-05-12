@@ -11,6 +11,12 @@ type Word = {
   wrong_count?: number;
 };
 
+type BankWord = {
+  word: string;
+  meaning: string;
+  source: "cet" | "ielts";
+};
+
 const headers = {
   "content-type": "application/json; charset=utf-8",
 };
@@ -21,6 +27,129 @@ const modeNames: Record<string, string> = {
   meaning_listen_spell: "看意思听发音拼写",
   random_spell: "乱序拼写",
 };
+
+const autoWordBank: BankWord[] = [
+  { word: "access", meaning: "通道；使用权", source: "cet" },
+  { word: "accurate", meaning: "准确的", source: "cet" },
+  { word: "annual", meaning: "每年的；年度的", source: "cet" },
+  { word: "approach", meaning: "方法；接近", source: "cet" },
+  { word: "approve", meaning: "赞成；批准", source: "cet" },
+  { word: "aspect", meaning: "方面", source: "cet" },
+  { word: "assign", meaning: "分配；布置", source: "cet" },
+  { word: "benefit", meaning: "益处；受益", source: "cet" },
+  { word: "capacity", meaning: "能力；容量", source: "cet" },
+  { word: "challenge", meaning: "挑战", source: "cet" },
+  { word: "circumstance", meaning: "情况；环境", source: "cet" },
+  { word: "complex", meaning: "复杂的", source: "cet" },
+  { word: "concentrate", meaning: "集中；专心", source: "cet" },
+  { word: "conduct", meaning: "实施；行为", source: "cet" },
+  { word: "consequence", meaning: "结果；后果", source: "cet" },
+  { word: "construct", meaning: "建造；构成", source: "cet" },
+  { word: "contrast", meaning: "对比；差异", source: "cet" },
+  { word: "contribute", meaning: "贡献；促成", source: "cet" },
+  { word: "decline", meaning: "下降；拒绝", source: "cet" },
+  { word: "define", meaning: "定义；限定", source: "cet" },
+  { word: "derive", meaning: "获得；源于", source: "cet" },
+  { word: "device", meaning: "设备；装置", source: "cet" },
+  { word: "efficient", meaning: "高效的", source: "cet" },
+  { word: "element", meaning: "要素；元素", source: "cet" },
+  { word: "emphasize", meaning: "强调", source: "cet" },
+  { word: "essential", meaning: "必要的；本质的", source: "cet" },
+  { word: "evidence", meaning: "证据", source: "cet" },
+  { word: "factor", meaning: "因素", source: "cet" },
+  { word: "feature", meaning: "特征；特色", source: "cet" },
+  { word: "function", meaning: "功能；起作用", source: "cet" },
+  { word: "identify", meaning: "识别；确认", source: "cet" },
+  { word: "impact", meaning: "影响；冲击", source: "cet" },
+  { word: "individual", meaning: "个人；个别的", source: "cet" },
+  { word: "indicate", meaning: "表明；指出", source: "cet" },
+  { word: "maintain", meaning: "保持；维护", source: "cet" },
+  { word: "majority", meaning: "大多数", source: "cet" },
+  { word: "method", meaning: "方法", source: "cet" },
+  { word: "occur", meaning: "发生；出现", source: "cet" },
+  { word: "participate", meaning: "参加；参与", source: "cet" },
+  { word: "potential", meaning: "潜在的；潜力", source: "cet" },
+  { word: "previous", meaning: "以前的", source: "cet" },
+  { word: "process", meaning: "过程；处理", source: "cet" },
+  { word: "purchase", meaning: "购买", source: "cet" },
+  { word: "range", meaning: "范围；一系列", source: "cet" },
+  { word: "reflect", meaning: "反映；思考", source: "cet" },
+  { word: "region", meaning: "地区；区域", source: "cet" },
+  { word: "release", meaning: "释放；发布", source: "cet" },
+  { word: "reliable", meaning: "可靠的", source: "cet" },
+  { word: "require", meaning: "需要；要求", source: "cet" },
+  { word: "respond", meaning: "回应；响应", source: "cet" },
+  { word: "significant", meaning: "重要的；显著的", source: "cet" },
+  { word: "specific", meaning: "具体的；特定的", source: "cet" },
+  { word: "strategy", meaning: "策略", source: "cet" },
+  { word: "structure", meaning: "结构", source: "cet" },
+  { word: "sufficient", meaning: "足够的", source: "cet" },
+  { word: "survey", meaning: "调查", source: "cet" },
+  { word: "transfer", meaning: "转移；转让", source: "cet" },
+  { word: "typical", meaning: "典型的", source: "cet" },
+  { word: "variety", meaning: "多样；种类", source: "cet" },
+  { word: "version", meaning: "版本；说法", source: "cet" },
+  { word: "abstract", meaning: "抽象的；摘要", source: "ielts" },
+  { word: "accommodate", meaning: "容纳；适应", source: "ielts" },
+  { word: "accumulate", meaning: "积累", source: "ielts" },
+  { word: "acknowledge", meaning: "承认；感谢", source: "ielts" },
+  { word: "advocate", meaning: "提倡；拥护者", source: "ielts" },
+  { word: "allocate", meaning: "分配", source: "ielts" },
+  { word: "ambiguous", meaning: "模棱两可的", source: "ielts" },
+  { word: "analyse", meaning: "分析", source: "ielts" },
+  { word: "anticipate", meaning: "预期；预料", source: "ielts" },
+  { word: "apparent", meaning: "显然的；表面的", source: "ielts" },
+  { word: "appropriate", meaning: "合适的", source: "ielts" },
+  { word: "approximately", meaning: "大约", source: "ielts" },
+  { word: "assumption", meaning: "假设", source: "ielts" },
+  { word: "attribute", meaning: "属性；归因于", source: "ielts" },
+  { word: "collapse", meaning: "倒塌；崩溃", source: "ielts" },
+  { word: "commodity", meaning: "商品", source: "ielts" },
+  { word: "comprehensive", meaning: "全面的", source: "ielts" },
+  { word: "contemporary", meaning: "当代的", source: "ielts" },
+  { word: "contradict", meaning: "反驳；矛盾", source: "ielts" },
+  { word: "controversial", meaning: "有争议的", source: "ielts" },
+  { word: "criteria", meaning: "标准", source: "ielts" },
+  { word: "deduce", meaning: "推断", source: "ielts" },
+  { word: "demonstrate", meaning: "证明；展示", source: "ielts" },
+  { word: "dimension", meaning: "维度；方面", source: "ielts" },
+  { word: "diverse", meaning: "多样的", source: "ielts" },
+  { word: "domestic", meaning: "国内的；家庭的", source: "ielts" },
+  { word: "dominant", meaning: "占主导的", source: "ielts" },
+  { word: "eliminate", meaning: "消除；淘汰", source: "ielts" },
+  { word: "emerge", meaning: "出现；浮现", source: "ielts" },
+  { word: "empirical", meaning: "经验主义的；实证的", source: "ielts" },
+  { word: "enhance", meaning: "提高；增强", source: "ielts" },
+  { word: "equivalent", meaning: "相等的；等同物", source: "ielts" },
+  { word: "explicit", meaning: "明确的", source: "ielts" },
+  { word: "framework", meaning: "框架", source: "ielts" },
+  { word: "hypothesis", meaning: "假设", source: "ielts" },
+  { word: "incentive", meaning: "激励；刺激", source: "ielts" },
+  { word: "inevitable", meaning: "不可避免的", source: "ielts" },
+  { word: "infrastructure", meaning: "基础设施", source: "ielts" },
+  { word: "innovation", meaning: "创新", source: "ielts" },
+  { word: "intervention", meaning: "干预", source: "ielts" },
+  { word: "isolate", meaning: "隔离；孤立", source: "ielts" },
+  { word: "justify", meaning: "证明合理", source: "ielts" },
+  { word: "legislation", meaning: "立法；法律", source: "ielts" },
+  { word: "migration", meaning: "迁移；移民", source: "ielts" },
+  { word: "modify", meaning: "修改；调整", source: "ielts" },
+  { word: "objective", meaning: "客观的；目标", source: "ielts" },
+  { word: "obtain", meaning: "获得", source: "ielts" },
+  { word: "occupy", meaning: "占据；占用", source: "ielts" },
+  { word: "paradigm", meaning: "范式；典型", source: "ielts" },
+  { word: "proportion", meaning: "比例；部分", source: "ielts" },
+  { word: "revolution", meaning: "革命；巨大变化", source: "ielts" },
+  { word: "subsequent", meaning: "随后的", source: "ielts" },
+  { word: "substitute", meaning: "替代；替代品", source: "ielts" },
+  { word: "sustain", meaning: "维持；支撑", source: "ielts" },
+  { word: "transmit", meaning: "传送；传播", source: "ielts" },
+  { word: "ultimate", meaning: "最终的；根本的", source: "ielts" },
+  { word: "undergo", meaning: "经历；经受", source: "ielts" },
+  { word: "whereas", meaning: "然而；鉴于", source: "ielts" },
+  { word: "welfare", meaning: "福利；幸福", source: "ielts" },
+  { word: "widespread", meaning: "广泛的", source: "ielts" },
+];
 
 export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   try {
@@ -97,9 +226,11 @@ function daysBetween(start: string, end: string) {
 async function getAppState(db: D1Database, url: URL) {
   const userId = url.searchParams.get("userId") || "wang";
   const date = localDate(url);
+  const source = normalizeSource(url.searchParams.get("source"));
   const users = await db.prepare("SELECT id, name FROM users ORDER BY id DESC").all();
-  const groups = await getGroups(db);
   const todayGroupNumber = await getScheduledGroupNumber(db, date);
+  await ensureDailyAutoGroup(db, todayGroupNumber, source);
+  const groups = await getGroups(db);
   const todayGroup = getScheduledGroup(groups, todayGroupNumber);
   const checkin = await db
     .prepare("SELECT * FROM checkins WHERE user_id = ? AND date = ?")
@@ -134,6 +265,42 @@ async function getAppState(db: D1Database, url: URL) {
     dailyGoal,
     modes: modeNames,
   };
+}
+
+function normalizeSource(source: string | null): "cet" | "ielts" {
+  return source === "ielts" ? "ielts" : "cet";
+}
+
+async function ensureDailyAutoGroup(db: D1Database, groupNumber: number, source: "cet" | "ielts") {
+  const existing = await db
+    .prepare(
+      `SELECT g.id, COUNT(w.id) AS word_count
+       FROM word_groups g
+       LEFT JOIN words w ON w.group_id = g.id
+       WHERE g.group_number = ?
+       GROUP BY g.id`
+    )
+    .bind(groupNumber)
+    .first<{ id: number; word_count: number }>();
+  if (existing && existing.word_count > 0) return;
+
+  const candidates = [...autoWordBank.filter((word) => word.source === source), ...autoWordBank.filter((word) => word.source !== source)];
+  const group = await createGroup(db, groupNumber);
+  let position = existing?.word_count || 0;
+  const inserted: string[] = [];
+
+  for (const item of candidates) {
+    if (position >= 30) break;
+    const existingWord = await db.prepare("SELECT id FROM words WHERE word = ? COLLATE NOCASE").bind(item.word).first();
+    if (existingWord || inserted.includes(item.word)) continue;
+    position += 1;
+    inserted.push(item.word);
+    await db.prepare("INSERT INTO words (word, meaning, group_id, position) VALUES (?, ?, ?, ?)").bind(item.word, item.meaning, group.id, position).run();
+  }
+
+  if (position === 0) {
+    await db.prepare("DELETE FROM word_groups WHERE id = ?").bind(group.id).run();
+  }
 }
 
 async function getGroups(db: D1Database) {
